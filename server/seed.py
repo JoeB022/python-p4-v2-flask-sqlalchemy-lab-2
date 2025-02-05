@@ -1,34 +1,64 @@
-#!/usr/bin/env python3
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import MetaData
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy_serializer import SerializerMixin
 
-from app import app
-from models import db, Customer, Review, Item
+metadata = MetaData(naming_convention={
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+})
 
-with app.app_context():
+db = SQLAlchemy(metadata=metadata)
 
-    Customer.query.delete()
-    Review.query.delete()
-    Item.query.delete()
 
-    customer1 = Customer(name='Tal Yuri')
-    customer2 = Customer(name='Raha Rosario')
-    customer3 = Customer(name='Luca Mahan')
-    db.session.add_all([customer1, customer2, customer3])
-    db.session.commit()
+class Customer(db.Model, SerializerMixin):
+    __tablename__ = 'customers'
 
-    item1 = Item(name='Laptop Backpack', price=49.99)
-    item2 = Item(name='Insulated Coffee Mug', price=9.99)
-    item3 = Item(name='6 Foot HDMI Cable', price=12.99)
-    db.session.add_all([item1, item2, item3])
-    db.session.commit()
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False)
 
-    db.session.add(Review(comment="zipper broke the first week",
-                   customer=customer1, item=item1))
-    db.session.add(Review(comment="love this backpack!",
-                   customer=customer2, item=item1))
-    db.session.add(Review(comment="coffee stays hot for hours!",
-                   customer=customer1, item=item2))
-    db.session.add(Review(comment="best coffee mug ever!",
-                   customer=customer3, item=item2))
-    db.session.add(Review(comment="cable too short",
-                   customer=customer3, item=item3))
-    db.session.commit()
+    # Relationships
+    reviews = db.relationship('Review', back_populates='customer', cascade="all, delete-orphan")
+    items = association_proxy('reviews', 'item')
+
+    # Serialization rules to avoid recursion issues
+    serialize_rules = ('-reviews.customer',)
+
+    def __repr__(self):
+        return f'<Customer {self.id}, {self.name}>'
+
+
+class Item(db.Model, SerializerMixin):
+    __tablename__ = 'items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String)
+    price = db.Column(db.Float)
+
+    # Relationships
+    reviews = db.relationship('Review', back_populates='item', cascade="all, delete-orphan")
+    customers = association_proxy('reviews', 'customer')
+
+    # Serialization rules to prevent circular references
+    serialize_rules = ('-reviews.item',)
+
+    def __repr__(self):
+        return f'<Item {self.id}, {self.name}, {self.price}>'
+
+
+class Review(db.Model, SerializerMixin):
+    __tablename__ = 'reviews'
+
+    id = db.Column(db.Integer, primary_key=True)
+    comment = db.Column(db.String, nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey('items.id'), nullable=False)
+
+    # Relationships
+    customer = db.relationship('Customer', back_populates='reviews')
+    item = db.relationship('Item', back_populates='reviews')
+
+    # Serialization rules to prevent infinite recursion
+    serialize_rules = ('-customer.reviews', '-item.reviews')
+
+    def __repr__(self):
+        return f'<Review {self.id}, Customer {self.customer_id}, Item {self.item_id}>'
