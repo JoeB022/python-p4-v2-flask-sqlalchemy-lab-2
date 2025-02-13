@@ -1,7 +1,6 @@
 from app import app, db
 from server.models import Customer, Item, Review
 
-
 class TestSerialization:
     '''models in models.py'''
 
@@ -10,12 +9,12 @@ class TestSerialization:
         with app.app_context():
             c = Customer(name='Phil')
             db.session.add(c)
-            db.session.commit()
-            r = Review(comment='great!', customer=c)
+            db.session.commit()  # Ensure the customer is committed before creating a review
+            r = Review(comment='great!', customer=c, item=Item(name='Mug', price=5.99))  # Create an item as well
             db.session.add(r)
             db.session.commit()
-            customer_dict = c.to_dict()
 
+            customer_dict = c.to_dict()
             assert customer_dict['id']
             assert customer_dict['name'] == 'Phil'
             assert customer_dict['reviews']
@@ -26,8 +25,8 @@ class TestSerialization:
         with app.app_context():
             i = Item(name='Insulated Mug', price=9.99)
             db.session.add(i)
-            db.session.commit()
-            r = Review(comment='great!', item=i)
+            db.session.commit()  # Ensure the item is committed before creating a review
+            r = Review(comment='great!', item=i, customer=Customer(name='Phil'))  # Create a customer as well
             db.session.add(r)
             db.session.commit()
 
@@ -41,8 +40,8 @@ class TestSerialization:
     def test_review_is_serializable(self):
         '''review is serializable'''
         with app.app_context():
-            c = Customer()
-            i = Item()
+            c = Customer(name='Phil')
+            i = Item(name='Mug', price=5.99)
             db.session.add_all([c, i])
             db.session.commit()
 
